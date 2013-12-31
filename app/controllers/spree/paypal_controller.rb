@@ -63,6 +63,7 @@ module Spree
     end
 
     def confirm
+      binding.pry
       order = current_order
       order.payments.create!({
         :source => Spree::PaypalExpressCheckout.create({
@@ -76,9 +77,9 @@ module Spree
       if order.complete?
         flash.notice = Spree.t(:order_processed_successfully)
         flash[:commerce_tracking] = "nothing special"
-        redirect_to checkout_success_checkout_path(order.number)
+        redirect_to main_app.success_checkout_path(order.number)
       else
-        redirect_to checkout_path
+        redirect_to main_app.checkout_path
       end
     end
 
