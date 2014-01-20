@@ -39,7 +39,7 @@ module Spree
         item[:Amount][:value].zero?
       end
       pp_request = provider.build_set_express_checkout({
-        :SetExpressCheckoutRequestDetails => {
+        :SetExpressCheckoutRequestDetails {
           :ReturnURL => confirm_paypal_url(:payment_method_id => params[:payment_method_id], :utm_nooverride => 1),
           :CancelURL =>  cancel_paypal_url,
           :SolutionType => payment_method.preferred_solution.present? ? payment_method.preferred_solution : "Mark",
@@ -51,18 +51,19 @@ module Spree
       begin
         pp_response = provider.set_express_checkout(pp_request)
         if pp_response.success?
-          redirect_to provider.express_checkout_url(pp_response, :useraction => 'commit')
+          redirect_to provider.express_checkout_url(pp_response, useraction: 'commit')
         else
           flash[:error] = "PayPal failed. #{pp_response.errors.map(&:long_message).join(" ")}"
-          redirect_to checkout_state_path(:payment)
+          redirect_to main_app.checkout_path
         end
       rescue SocketError
         flash[:error] = "Could not connect to PayPal."
-        redirect_to checkout_state_path(:payment)
+        redirect_to main_app.checkout_path
       end
     end
 
     def confirm
+      binding.pry
       order = current_order
       order.payments.create!({
         :source => Spree::PaypalExpressCheckout.create({
