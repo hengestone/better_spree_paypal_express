@@ -90,7 +90,7 @@ module Spree
     private
 
     def paypal_success_path
-      provider.express_checkout_url(pp_response, :useraction => 'commit')
+      checkout_state_path(:payment)
     end
 
     def paypal_error_path
