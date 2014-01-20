@@ -63,7 +63,6 @@ module Spree
     end
 
     def confirm
-      binding.pry
       order = current_order
       order.payments.create!({
         :source => Spree::PaypalExpressCheckout.create({
