@@ -54,11 +54,11 @@ module Spree
           redirect_to provider.express_checkout_url(pp_response, useraction: 'commit')
         else
           flash[:error] = "PayPal failed. #{pp_response.errors.map(&:long_message).join(" ")}"
-          redirect_to main_app.checkout_path
+          redirect_to paypal_error_path
         end
       rescue SocketError
         flash[:error] = "Could not connect to PayPal."
-        redirect_to main_app.checkout_path
+        redirect_to paypal_error_path
       end
     end
 
@@ -78,16 +78,28 @@ module Spree
         flash[:commerce_tracking] = "nothing special"
         redirect_to main_app.success_checkout_path(order.number)
       else
-        redirect_to main_app.checkout_path
+        redirect_to paypal_error_path
       end
     end
 
     def cancel
       flash[:notice] = "Don't want to use PayPal? No problems."
-      redirect_to checkout_state_path(current_order.state)
+      redirect_to after_cancel_path
     end
 
     private
+
+    def paypal_success_path
+      provider.express_checkout_url(pp_response, :useraction => 'commit')
+    end
+
+    def paypal_error_path
+      checkout_state_path(current_order.state)
+    end
+
+    def after_cancel_path
+      checkout_state_path(current_order.state)
+    end
 
     def payment_method
       Spree::PaymentMethod.find(params[:payment_method_id])
