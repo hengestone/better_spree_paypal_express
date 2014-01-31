@@ -14,7 +14,7 @@ module Spree
         }
       end
 
-      tax_adjustments = current_order.adjustments.tax
+      tax_adjustments = current_order.adjustments.tax + current_order.adjustments.tax_cloud
       # TODO: Remove in Spree 2.2
       tax_adjustments = tax_adjustments.additional if tax_adjustments.respond_to?(:additional)
       shipping_adjustments = current_order.adjustments.shipping
@@ -35,9 +35,7 @@ module Spree
       # See #10
       # https://cms.paypal.com/uk/cgi-bin/?cmd=_render-content&content_ID=developer/e_howto_api_ECCustomizing
       # "It can be a positive or negative value but not zero."
-      items.reject! do |item|
-        item[:Amount][:value].zero?
-      end
+      items.reject!{|item| item[:Amount][:value].zero? }
       pp_request = provider.build_set_express_checkout({
         :SetExpressCheckoutRequestDetails => {
           :ReturnURL => confirm_paypal_url(:payment_method_id => params[:payment_method_id], :utm_nooverride => 1),
@@ -68,15 +66,15 @@ module Spree
         :source => Spree::PaypalExpressCheckout.create({
           :token => params[:token],
           :payer_id => params[:PayerID]
-        } ),
+        }),
         :amount => order.total,
         :payment_method => payment_method
-      } )
+      })
       order.next
       if order.complete?
         flash.notice = Spree.t(:order_processed_successfully)
         flash[:commerce_tracking] = "nothing special"
-        redirect_to main_app.success_checkout_path(order.number)
+        redirect_to paypal_success_path
       else
         redirect_to paypal_error_path
       end
@@ -110,14 +108,14 @@ module Spree
     end
 
     def payment_details items
-      item_sum = items.sum { |i| i[:Quantity] * i[:Amount][:value] }
-      # Would use tax_total here, but it can include "included" taxes as well.
-      # For instance, tax_total would include the 10% GST in Australian stores.
-      # A quick sum will get us around that little problem.
-      # TODO: Remove additional check in 2.2
-      tax_adjustments = current_order.adjustments.tax
-      tax_adjustments = tax_adjustments.additional if tax_adjustments.respond_to?(:additional)
-      tax_adjustments_total = tax_adjustments.sum(:amount)
+      item_sum = items.sum{|i| i[:Quantity] * i[:Amount][:value] }
+      # # Would use tax_total here, but it can include "included" taxes as well.
+      # # For instance, tax_total would include the 10% GST in Australian stores.
+      # # A quick sum will get us around that little problem.
+      # # TODO: Remove additional check in 2.2
+      # tax_adjustments = current_order.adjustments.tax + current_order.adjustments.tax_cloud
+      # tax_adjustments = tax_adjustments.additional if tax_adjustments.respond_to?(:additional)
+      # tax_adjustments_total = tax_adjustments.sum(&:amount)
 
       if item_sum.zero?
         # Paypal does not support no items or a zero dollar ItemTotal
@@ -144,7 +142,7 @@ module Spree
           },
           :TaxTotal => {
             :currencyID => current_order.currency,
-            :value => tax_adjustments_total,
+            :value => current_order.tax_total,
           },
           :ShipToAddress => address_options,
           :PaymentDetailsItem => items,
@@ -156,14 +154,13 @@ module Spree
 
     def address_options
       {
-        :Name => current_order.bill_address.try(:full_name),
-        :Street1 => current_order.bill_address.address1,
-        :Street2 => current_order.bill_address.address2,
-        :CityName => current_order.bill_address.city,
-        # :phone => current_order.bill_address.phone,
-        :StateOrProvince => current_order.bill_address.state_text,
-        :Country => current_order.bill_address.country.iso,
-        :PostalCode => current_order.bill_address.zipcode
+        :Name => current_order.ship_address.try(:full_name),
+        :Street1 => current_order.ship_address.address1,
+        :Street2 => current_order.ship_address.address2,
+        :CityName => current_order.ship_address.city,
+        :StateOrProvince => current_order.ship_address.state_text,
+        :Country => current_order.ship_address.country.iso,
+        :PostalCode => current_order.ship_address.zipcode
       }
     end
   end
