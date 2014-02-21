@@ -53,10 +53,60 @@ describe Spree::Gateway::PayPalExpress do
 
     # Test for #4
     it "fails" do
-      response = double('pp_response', :success? => false, 
+      response = double('pp_response', :success? => false,
                           :errors => [double('pp_response_error', :long_message => "An error goes here.")])
       provider.should_receive(:do_express_checkout_payment).and_return(response)
       lambda { payment.purchase! }.should raise_error(Spree::Core::GatewayError, "An error goes here.")
     end
+
+    
   end
+
+  context "Canceling an order" do
+    describe "crediting an account via cancel" do
+      let(:source){ double(transaction_id: "ABC123") }
+      let(:order){ FactoryGirl.create(:order, tax_total: BigDecimal.new("0"), payment_total: BigDecimal.new("3000"), adjustment_total: BigDecimal.new("500"), item_total: BigDecimal.new('2500'), total: BigDecimal.new('3000')) }
+      let(:payment) do 
+        pmt = order.payments.create(amount: BigDecimal.new('3000'))
+        pmt.source = Spree::PaypalExpressCheckout.create!(:transaction_id => 'abc123', :token => 'fake_token', :payer_id => 'fake_payer_id')
+        pmt.save!
+        pmt
+      end
+
+      let(:amount){ 0 } # when cancelling via spree admin dashboard, credit!(nil) is called. effectively zero for the refund_amount
+      let(:response_code){ nil }
+      let(:gateway_options) do
+        {
+          :email => "me@example.com",
+          :customer => "me@example.com",
+          :customer_id => 1,
+          :ip => "127.0.0.1",
+          :order_id => "#{order.number}-#{payment.identifier}",
+          :shipping =>  order.adjustment_total,
+          :tax => order.tax_total,
+          :subtotal =>  order.item_total,
+          :discount =>  BigDecimal.new("0"),
+          :currency => "USD",
+          :billing_address => nil,
+          :shipping_address =>  {
+            :name => "Cali Bob",
+            :address1 => "555 Rock Ridge Road",
+            :address2 => "",
+            :city => "Los Angeles",
+            :state => "CA",
+            :zip => "90210",
+            :country => "US",
+            :phone => "555 555 5555"
+          }
+        }
+      end
+
+      it "successfully cancels an order" do
+        described_class.any_instance.should_receive(:refund).with(payment, order.total)
+        paypal = described_class.new
+        paypal.credit(amount, response_code, gateway_options)
+      end
+    end
+  end
+
 end

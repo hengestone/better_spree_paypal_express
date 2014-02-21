@@ -90,6 +90,14 @@ module Spree
       end
       refund_transaction_response
     end
+
+    def credit(amount, response_code, gateway_options)
+      order_number, payment_identifier = gateway_options[:order_id].try(:split, '-')
+      order = Spree::Order.find_by(number: order_number)
+      payment = order.payments.find_by(identifier: payment_identifier)
+
+      refund(payment, order.total)
+    end
   end
 end
 
