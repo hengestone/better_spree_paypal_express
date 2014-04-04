@@ -14,9 +14,7 @@ module Spree
         }
       end
 
-      tax_adjustments = current_order.adjustments.tax + current_order.adjustments.tax_cloud
-      # TODO: Remove in Spree 2.2
-      tax_adjustments = tax_adjustments.additional if tax_adjustments.respond_to?(:additional)
+      tax_adjustments = current_order.adjustments.tax.additional + current_order.adjustments.tax_cloud
       shipping_adjustments = current_order.adjustments.shipping
 
       current_order.adjustments.eligible.each do |adjustment|
@@ -38,6 +36,7 @@ module Spree
       items.reject!{|item| item[:Amount][:value].zero? }
       pp_request = provider.build_set_express_checkout({
         :SetExpressCheckoutRequestDetails => {
+          :InvoiceID => order.number,
           :ReturnURL => confirm_paypal_url(:payment_method_id => params[:payment_method_id], :utm_nooverride => 1),
           :CancelURL =>  cancel_paypal_url,
           :SolutionType => payment_method.preferred_solution.present? ? payment_method.preferred_solution : "Mark",
@@ -142,7 +141,7 @@ module Spree
           },
           :TaxTotal => {
             :currencyID => current_order.currency,
-            :value => current_order.tax_total,
+            :value => current_order.additional_tax_total,
           },
           :ShipToAddress => address_options,
           :PaymentDetailsItem => items,
