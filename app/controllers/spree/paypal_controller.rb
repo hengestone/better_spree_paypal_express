@@ -1,6 +1,7 @@
 module Spree
   class PaypalController < StoreController
     def express
+      order = current_order || raise(ActiveRecord::RecordNotFound)
       items = current_order.line_items.map do |item|
         {
           :Name => item.product.name,
