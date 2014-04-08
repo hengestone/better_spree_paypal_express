@@ -8,23 +8,23 @@ module Spree
           :Number => item.variant.sku,
           :Quantity => item.quantity,
           :Amount => {
-            :currencyID => current_order.currency,
+            :currencyID => order.currency,
             :value => item.price
           },
           :ItemCategory => "Physical"
         }
       end
 
-      tax_adjustments = current_order.adjustments.tax.additional + current_order.adjustments.tax_cloud
-      shipping_adjustments = current_order.adjustments.shipping
+      tax_adjustments = order.adjustments.tax.additional + order.adjustments.tax_cloud
+      shipping_adjustments = order.adjustments.shipping
 
-      current_order.adjustments.eligible.each do |adjustment|
+      order.adjustments.eligible.each do |adjustment|
         next if (tax_adjustments + shipping_adjustments).include?(adjustment)
         items << {
           :Name => adjustment.label,
           :Quantity => 1,
           :Amount => {
-            :currencyID => current_order.currency,
+            :currencyID => order.currency,
             :value => adjustment.amount
           }
         }
@@ -52,16 +52,16 @@ module Spree
           redirect_to provider.express_checkout_url(pp_response, useraction: 'commit')
         else
           flash[:error] = "PayPal failed. #{pp_response.errors.map(&:long_message).join(" ")}"
-          redirect_to paypal_error_path
+          redirect_to paypal_error_path(order)
         end
       rescue SocketError
         flash[:error] = "Could not connect to PayPal."
-        redirect_to paypal_error_path
+        redirect_to paypal_error_path(order)
       end
     end
 
     def confirm
-      order = current_order
+      order = current_order || raise(ActiveRecord::RecordNotFound)
       order.payments.create!({
         :source => Spree::PaypalExpressCheckout.create({
           :token => params[:token],
@@ -76,7 +76,7 @@ module Spree
         flash[:commerce_tracking] = "nothing special"
         redirect_to paypal_success_path
       else
-        redirect_to paypal_error_path
+        redirect_to paypal_error_path(order)
       end
     end
 
@@ -91,8 +91,8 @@ module Spree
       checkout_state_path(:payment)
     end
 
-    def paypal_error_path
-      checkout_state_path(current_order.state)
+    def paypal_error_path(order)
+      checkout_state_path(order.state)
     end
 
     def after_cancel_path
@@ -109,13 +109,6 @@ module Spree
 
     def payment_details items
       item_sum = items.sum{|i| i[:Quantity] * i[:Amount][:value] }
-      # # Would use tax_total here, but it can include "included" taxes as well.
-      # # For instance, tax_total would include the 10% GST in Australian stores.
-      # # A quick sum will get us around that little problem.
-      # # TODO: Remove additional check in 2.2
-      # tax_adjustments = current_order.adjustments.tax + current_order.adjustments.tax_cloud
-      # tax_adjustments = tax_adjustments.additional if tax_adjustments.respond_to?(:additional)
-      # tax_adjustments_total = tax_adjustments.sum(&:amount)
 
       if item_sum.zero?
         # Paypal does not support no items or a zero dollar ItemTotal
