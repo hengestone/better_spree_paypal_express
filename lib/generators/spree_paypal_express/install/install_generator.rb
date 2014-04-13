@@ -5,12 +5,10 @@ module SpreePaypalExpress
       class_option :auto_run_migrations, :type => :boolean, :default => false
 
       def add_javascripts
-        append_file 'app/assets/javascripts/store/all.js', "//= require store/spree_paypal_express\n"
         append_file 'app/assets/javascripts/admin/all.js', "//= require admin/spree_paypal_express\n"
       end
 
       def add_stylesheets
-        frontend_css_file = "app/assets/stylesheets/store/all.css"
         backend_css_file = "app/assets/stylesheets/admin/all.css"
 
         if File.exist?(backend_css_file) && File.exist?(frontend_css_file)
