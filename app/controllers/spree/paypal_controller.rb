@@ -2,20 +2,9 @@ module Spree
   class PaypalController < StoreController
     def express
       order = current_order || raise(ActiveRecord::RecordNotFound)
-      items = current_order.line_items.map do |item|
-        {
-          :Name => item.product.name,
-          :Number => item.variant.sku,
-          :Quantity => item.quantity,
-          :Amount => {
-            :currencyID => order.currency,
-            :value => item.price
-          },
-          :ItemCategory => "Physical"
-        }
-      end
+      items = order.line_items.map(&method(:line_item))
 
-      tax_adjustments = order.adjustments.tax.additional + order.adjustments.tax_cloud
+      tax_adjustments = order.adjustments.tax.additional
       shipping_adjustments = order.adjustments.shipping
 
       order.adjustments.eligible.each do |adjustment|
@@ -34,28 +23,21 @@ module Spree
       # See #10
       # https://cms.paypal.com/uk/cgi-bin/?cmd=_render-content&content_ID=developer/e_howto_api_ECCustomizing
       # "It can be a positive or negative value but not zero."
-      items.reject!{|item| item[:Amount][:value].zero? }
-      pp_request = provider.build_set_express_checkout({
-        :SetExpressCheckoutRequestDetails => {
-          :InvoiceID => order.number,
-          :ReturnURL => confirm_paypal_url(:payment_method_id => params[:payment_method_id], :utm_nooverride => 1),
-          :CancelURL =>  cancel_paypal_url,
-          :SolutionType => payment_method.preferred_solution.present? ? payment_method.preferred_solution : "Mark",
-          :LandingPage => payment_method.preferred_landing_page.present? ? payment_method.preferred_landing_page : "Billing",
-          :cppheaderimage => payment_method.preferred_logourl.present? ? payment_method.preferred_logourl : "",
-          :PaymentDetails => [payment_details(items)]
-        }})
+      items.reject! do |item|
+        item[:Amount][:value].zero?
+      end
+      pp_request = provider.build_set_express_checkout(express_checkout_request_details(order, items))
 
       begin
         pp_response = provider.set_express_checkout(pp_request)
         if pp_response.success?
-          redirect_to provider.express_checkout_url(pp_response, useraction: 'commit')
+          redirect_to provider.express_checkout_url(pp_response, :useraction => 'commit')
         else
-          flash[:error] = "PayPal failed. #{pp_response.errors.map(&:long_message).join(" ")}"
+          flash[:error] = Spree.t('flash.generic_error', :scope => 'paypal', :reasons => pp_response.errors.map(&:long_message).join(" "))
           redirect_to paypal_error_path(order)
         end
       rescue SocketError
-        flash[:error] = "Could not connect to PayPal."
+        flash[:error] = Spree.t('flash.connection_failed', :scope => 'paypal')
         redirect_to paypal_error_path(order)
       end
     end
@@ -74,14 +56,15 @@ module Spree
       if order.complete?
         flash.notice = Spree.t(:order_processed_successfully)
         flash[:commerce_tracking] = "nothing special"
-        redirect_to paypal_success_path
+        redirect_to completion_route(order)
       else
         redirect_to paypal_error_path(order)
       end
     end
 
     def cancel
-      flash[:notice] = "Don't want to use PayPal? No problems."
+      flash[:notice] = Spree.t('flash.cancel', :scope => 'paypal')
+      order = current_order || raise(ActiveRecord::RecordNotFound)
       redirect_to after_cancel_path
     end
 
@@ -97,6 +80,31 @@ module Spree
 
     def after_cancel_path
       checkout_state_path(current_order.state)
+    end
+
+    def line_item(item)
+      {
+          :Name => item.product.name,
+          :Number => item.variant.sku,
+          :Quantity => item.quantity,
+          :Amount => {
+              :currencyID => item.order.currency,
+              :value => item.price
+          },
+          :ItemCategory => "Physical"
+      }
+    end
+
+    def express_checkout_request_details(order, items)
+      { :SetExpressCheckoutRequestDetails => {
+          :InvoiceID => order.number,
+          :ReturnURL => confirm_paypal_url(:payment_method_id => params[:payment_method_id], :utm_nooverride => 1),
+          :CancelURL =>  cancel_paypal_url,
+          :SolutionType => payment_method.preferred_solution.present? ? payment_method.preferred_solution : "Mark",
+          :LandingPage => payment_method.preferred_landing_page.present? ? payment_method.preferred_landing_page : "Billing",
+          :cppheaderimage => payment_method.preferred_logourl.present? ? payment_method.preferred_logourl : "",
+          :PaymentDetails => [payment_details(items)]
+      }}
     end
 
     def payment_method
@@ -135,7 +143,7 @@ module Spree
           },
           :TaxTotal => {
             :currencyID => current_order.currency,
-            :value => current_order.additional_tax_total,
+            :value => current_order.additional_tax_total
           },
           :ShipToAddress => address_options,
           :PaymentDetailsItem => items,
@@ -155,6 +163,10 @@ module Spree
         :Country => current_order.ship_address.country.iso,
         :PostalCode => current_order.ship_address.zipcode
       }
+    end
+
+    def completion_route(order)
+      order_path(order, token: order.token)
     end
   end
 end

@@ -78,7 +78,8 @@ module Spree
         :Amount => {
           :currencyID => payment.currency,
           :value => amount },
-        :RefundSource => "any" })
+        :RefundSource => "any"
+      })
       refund_transaction_response = provider.refund_transaction(refund_transaction)
       if refund_transaction_response.success?
         payment.source.update_attributes({
@@ -86,7 +87,16 @@ module Spree
           :refund_transaction_id => refund_transaction_response.RefundTransactionID,
           :state => "refunded",
           :refund_type => refund_type
-        } )
+        })
+
+        payment.class.create!(
+          :order => payment.order,
+          :source => payment,
+          :payment_method => payment.payment_method,
+          :amount => amount.to_f.abs * -1,
+          :response_code => refund_transaction_response.RefundTransactionID,
+          :state => 'completed'
+        )
       end
       refund_transaction_response
     end
