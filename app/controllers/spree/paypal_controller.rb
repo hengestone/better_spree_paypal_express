@@ -4,7 +4,7 @@ module Spree
       order = current_order || raise(ActiveRecord::RecordNotFound)
       items = order.line_items.map(&method(:line_item))
 
-      tax_adjustments = order.adjustments.tax.additional
+      tax_adjustments = order.adjustments.tax.additional + order.adjustments.tax_cloud
       shipping_adjustments = order.adjustments.shipping
 
       order.adjustments.eligible.each do |adjustment|
@@ -31,13 +31,14 @@ module Spree
       begin
         pp_response = provider.set_express_checkout(pp_request)
         if pp_response.success?
-          redirect_to provider.express_checkout_url(pp_response, :useraction => 'commit')
+          redirect_to provider.express_checkout_url(pp_response, useraction: 'commit')
         else
-          flash[:error] = Spree.t('flash.generic_error', :scope => 'paypal', :reasons => pp_response.errors.map(&:long_message).join(" "))
+          binding.pry
+          flash[:error] = Spree.t('flash.generic_error', scope: 'paypal', reasons: pp_response.errors.map(&:long_message).join(" "))
           redirect_to paypal_error_path(order)
         end
       rescue SocketError
-        flash[:error] = Spree.t('flash.connection_failed', :scope => 'paypal')
+        flash[:error] = Spree.t('flash.connection_failed', scope: 'paypal')
         redirect_to paypal_error_path(order)
       end
     end
@@ -63,7 +64,7 @@ module Spree
     end
 
     def cancel
-      flash[:notice] = Spree.t('flash.cancel', :scope => 'paypal')
+      flash[:notice] = Spree.t('flash.cancel', scope: 'paypal')
       order = current_order || raise(ActiveRecord::RecordNotFound)
       redirect_to after_cancel_path
     end
@@ -115,7 +116,7 @@ module Spree
       payment_method.provider
     end
 
-    def payment_details items
+    def payment_details(items)
       item_sum = items.sum{|i| i[:Quantity] * i[:Amount][:value] }
 
       if item_sum.zero?
