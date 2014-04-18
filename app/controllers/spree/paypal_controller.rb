@@ -33,7 +33,6 @@ module Spree
         if pp_response.success?
           redirect_to provider.express_checkout_url(pp_response, useraction: 'commit')
         else
-          binding.pry
           flash[:error] = Spree.t('flash.generic_error', scope: 'paypal', reasons: pp_response.errors.map(&:long_message).join(" "))
           redirect_to paypal_error_path(order)
         end
