@@ -4,7 +4,7 @@ module Spree
       order = current_order || raise(ActiveRecord::RecordNotFound)
       items = order.line_items.map(&method(:line_item))
 
-      tax_adjustments = order.all_adjustments.tax.additional + order.adjustments.try(:tax_cloud)
+      tax_adjustments = order.all_adjustments.tax.additional
       shipping_adjustments = order.all_adjustments.shipping
 
       order.all_adjustments.eligible.each do |adjustment|
@@ -23,9 +23,7 @@ module Spree
       # See #10
       # https://cms.paypal.com/uk/cgi-bin/?cmd=_render-content&content_ID=developer/e_howto_api_ECCustomizing
       # "It can be a positive or negative value but not zero."
-      items.reject! do |item|
-        item[:Amount][:value].zero?
-      end
+      items.reject!{|item| item[:Amount][:value].zero? }
       pp_request = provider.build_set_express_checkout(express_checkout_request_details(order, items))
 
       begin
