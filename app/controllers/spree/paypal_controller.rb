@@ -50,8 +50,7 @@ module Spree
         amount: order.total,
         payment_method: payment_method
       })
-      order.next
-      order.next if order.confirm?
+      loop{ break unless order.next }
       if order.complete?
         flash.notice = Spree.t(:order_processed_successfully)
         flash[:commerce_tracking] = "nothing special"
@@ -175,6 +174,10 @@ module Spree
 
     def completion_route(order)
       order_path(order, token: order.token)
+    end
+
+    def address_required?
+      payment_method.preferred_solution.eql?('Sole')
     end
   end
 end
