@@ -1,19 +1,16 @@
 module Spree
   class PaypalController < StoreController
     def express
-      order = current_order || raise(ActiveRecord::RecordNotFound)
-      items = order.line_items.map(&method(:line_item))
-
-      tax_adjustments = order.all_adjustments.tax.additional
-      shipping_adjustments = order.all_adjustments.shipping
-
-      order.all_adjustments.eligible.each do |adjustment|
+      items = user_order.line_items.map(&method(:line_item))
+      tax_adjustments = user_order.all_adjustments.tax.additional
+      shipping_adjustments = user_order.all_adjustments.shipping
+      user_order.all_adjustments.eligible.each do |adjustment|
         next if (tax_adjustments + shipping_adjustments).include?(adjustment)
         items << {
           :Name => adjustment.label,
           :Quantity => 1,
           :Amount => {
-            :currencyID => order.currency,
+            :currencyID => user_order.currency,
             :value => adjustment.amount
           }
         }
@@ -24,7 +21,7 @@ module Spree
       # https://cms.paypal.com/uk/cgi-bin/?cmd=_render-content&content_ID=developer/e_howto_api_ECCustomizing
       # "It can be a positive or negative value but not zero."
       items.reject!{|item| item[:Amount][:value].zero? }
-      pp_request = provider.build_set_express_checkout(express_checkout_request_details(order, items))
+      pp_request = provider.build_set_express_checkout(express_checkout_request_details(user_order, items))
 
       begin
         pp_response = provider.set_express_checkout(pp_request)
@@ -32,38 +29,36 @@ module Spree
           redirect_to provider.express_checkout_url(pp_response, useraction: 'commit')
         else
           flash[:error] = Spree.t('flash.generic_error', scope: 'paypal', reasons: pp_response.errors.map(&:long_message).join(" "))
-          redirect_to paypal_error_path(order)
+          redirect_to paypal_error_path(user_order)
         end
       rescue SocketError
         flash[:error] = Spree.t('flash.connection_failed', scope: 'paypal')
-        redirect_to paypal_error_path(order)
+        redirect_to paypal_error_path(user_order)
       end
     end
 
     def confirm
-      order = current_order || raise(ActiveRecord::RecordNotFound)
-      order.payments.create!({
+      user_order.payments.create!({
         source: Spree::PaypalExpressCheckout.create({
           token: params[:token],
           payer_id: params[:PayerID]
         }),
-        amount: order.total,
+        amount: user_order.total,
         payment_method: payment_method
       })
-      order.next
-      order.next if order.confirm?
-      if order.complete?
-        flash.notice = Spree.t(:order_processed_successfully)
+      user_order.next
+      user_order.next if user_order.confirm?
+      if user_order.complete?
+        flash.notice = Spree.t(:user_order_processed_successfully)
         flash[:commerce_tracking] = "nothing special"
-        redirect_to completion_route(order)
+        redirect_to completion_route(user_order)
       else
-        redirect_to paypal_error_path(order)
+        redirect_to paypal_error_path(user_order)
       end
     end
 
     def cancel
       flash[:notice] = Spree.t('flash.cancel', scope: 'paypal')
-      order = current_order || raise(ActiveRecord::RecordNotFound)
       redirect_to after_cancel_path
     end
 
@@ -73,12 +68,12 @@ module Spree
       checkout_state_path(:payment)
     end
 
-    def paypal_error_path(order)
-      checkout_state_path(order.state)
+    def paypal_error_path(user_order)
+      checkout_state_path(user_order.state)
     end
 
     def after_cancel_path
-      checkout_state_path(current_order.state)
+      checkout_state_path(user_order.state)
     end
 
     def line_item(item)
@@ -94,9 +89,9 @@ module Spree
       }
     end
 
-    def express_checkout_request_details(order, items)
+    def express_checkout_request_details(user_order, items)
       { :SetExpressCheckoutRequestDetails => {
-          :InvoiceID => order.number,
+          :InvoiceID => user_order.number,
           :ReturnURL => confirm_paypal_url(:payment_method_id => params[:payment_method_id], :utm_nooverride => 1),
           :CancelURL =>  cancel_paypal_url,
           :SolutionType => payment_method.preferred_solution.present? ? payment_method.preferred_solution : "Mark",
@@ -119,39 +114,39 @@ module Spree
 
       # This retrieves the cost of shipping after promotions are applied
       # For example, if shippng costs $10, and is free with a promotion, shipment_sum is now $10
-      shipment_sum = current_order.shipments.map(&:discounted_cost).sum
+      shipment_sum = user_order.shipments.map(&:discounted_cost).sum
 
-      # This calculates the item sum based upon what is in the order total, but not for shipping
+      # This calculates the item sum based upon what is in the user_order total, but not for shipping
       # or tax.  This is the easiest way to determine what the items should cost, as that
       # functionality doesn't currently exist in Spree core
-      item_sum = current_order.total - shipment_sum - current_order.additional_tax_total
+      item_sum = user_order.total - shipment_sum - user_order.additional_tax_total
 
       if item_sum.zero?
         # Paypal does not support no items or a zero dollar ItemTotal
-        # This results in the order summary being simply "Current purchase"
+        # This results in the user_order summary being simply "Current purchase"
         {
           :OrderTotal => {
-            :currencyID => current_order.currency,
-            :value => current_order.total
+            :currencyID => user_order.currency,
+            :value => user_order.total
           }
         }
       else
         {
           :OrderTotal => {
-            :currencyID => current_order.currency,
-            :value => current_order.total
+            :currencyID => user_order.currency,
+            :value => user_order.total
           },
           :ItemTotal => {
-            :currencyID => current_order.currency,
+            :currencyID => user_order.currency,
             :value => item_sum
           },
           :ShippingTotal => {
-            :currencyID => current_order.currency,
-            :value => current_order.ship_total
+            :currencyID => user_order.currency,
+            :value => user_order.ship_total
           },
           :TaxTotal => {
-            :currencyID => current_order.currency,
-            :value => current_order.additional_tax_total
+            :currencyID => user_order.currency,
+            :value => user_order.additional_tax_total
           },
           :ShipToAddress => address_options,
           :PaymentDetailsItem => items,
@@ -163,18 +158,22 @@ module Spree
 
     def address_options
       {
-        :Name => current_order.ship_address.try(:full_name),
-        :Street1 => current_order.ship_address.address1,
-        :Street2 => current_order.ship_address.address2,
-        :CityName => current_order.ship_address.city,
-        :StateOrProvince => current_order.ship_address.state_text,
-        :Country => current_order.ship_address.country.iso,
-        :PostalCode => current_order.ship_address.zipcode
+        :Name => user_order.ship_address.try(:full_name),
+        :Street1 => user_order.ship_address.address1,
+        :Street2 => user_order.ship_address.address2,
+        :CityName => user_order.ship_address.city,
+        :StateOrProvince => user_order.ship_address.state_text,
+        :Country => user_order.ship_address.country.iso,
+        :PostalCode => user_order.ship_address.zipcode
       }
     end
 
-    def completion_route(order)
-      order_path(order, token: order.token)
+    def completion_route(user_order)
+      user_order_path(user_order, token: user_order.token)
+    end
+
+    def user_order
+      @_user_order ||= current_order || current_user.orders.incomplete.user_order(updated_at: :desc).first || raise(ActiveRecord::RecordNotFound)
     end
   end
 end
