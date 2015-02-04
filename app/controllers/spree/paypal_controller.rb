@@ -173,7 +173,7 @@ module Spree
     end
 
     def user_order
-      @_user_order ||= current_order || current_user.orders.incomplete.user_order(updated_at: :desc).first || raise(ActiveRecord::RecordNotFound)
+      @_user_order ||= current_order || current_user.orders.incomplete.where(updated_at: :desc).first || raise(ActiveRecord::RecordNotFound)
     end
   end
 end
