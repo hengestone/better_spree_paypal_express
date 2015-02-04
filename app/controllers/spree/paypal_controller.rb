@@ -169,7 +169,7 @@ module Spree
     end
 
     def completion_route(user_order)
-      user_order_path(user_order, token: user_order.token)
+      order_path(user_order, token: user_order.token)
     end
 
     def user_order
