@@ -3,6 +3,8 @@ module Spree
     ssl_allowed
 
     def express
+      Rails.logger.warn session.inspect
+      Rails.logger.warn current_order.inspect
       order = current_order || raise(ActiveRecord::RecordNotFound)
       items = order.line_items.map(&method(:line_item))
 
