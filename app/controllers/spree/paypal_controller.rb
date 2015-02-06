@@ -83,19 +83,20 @@ module Spree
 
     def line_item(item)
       {
-          :Name => item.product.name,
-          :Number => item.variant.sku,
-          :Quantity => item.quantity,
-          :Amount => {
-              :currencyID => item.order.currency,
-              :value => item.price
-          },
-          :ItemCategory => "Physical"
+        :Name => item.product.name,
+        :Number => item.variant.sku,
+        :Quantity => item.quantity,
+        :Amount => {
+          :currencyID => item.order.currency,
+          :value => item.price
+        },
+        :ItemCategory => "Physical"
       }
     end
 
     def express_checkout_request_details(order, items)
-      { :SetExpressCheckoutRequestDetails => {
+      {
+        :SetExpressCheckoutRequestDetails => {
           :InvoiceID => order.number,
           :ReturnURL => confirm_paypal_url(:payment_method_id => params[:payment_method_id], :utm_nooverride => 1),
           :CancelURL =>  cancel_paypal_url,
@@ -103,7 +104,8 @@ module Spree
           :LandingPage => payment_method.preferred_landing_page.present? ? payment_method.preferred_landing_page : "Billing",
           :cppheaderimage => payment_method.preferred_logourl.present? ? payment_method.preferred_logourl : "",
           :PaymentDetails => [payment_details(items)]
-      }}
+        }
+      }
     end
 
     def payment_method
