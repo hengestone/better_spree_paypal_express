@@ -3,8 +3,6 @@ module Spree
     ssl_allowed
 
     def express
-      Rails.logger.warn session.inspect
-      Rails.logger.warn current_order.inspect
       order = current_order || raise(ActiveRecord::RecordNotFound)
       items = order.line_items.map(&method(:line_item))
 
@@ -35,6 +33,7 @@ module Spree
 
       begin
         pp_response = provider.set_express_checkout(pp_request)
+        Rails.logger.info pp_response.inspect
         if pp_response.success?
           redirect_to provider.express_checkout_url(pp_response, :useraction => 'commit')
         else
