@@ -38,6 +38,7 @@ module Spree
     end
 
     def confirm
+<<<<<<< HEAD
       user_order.payments.create!({
         source: Spree::PaypalExpressCheckout.create({
           token: params[:token],
@@ -50,6 +51,20 @@ module Spree
       user_order.next if user_order.confirm?
       if user_order.complete?
         flash.notice = Spree.t(:user_order_processed_successfully)
+=======
+      order = current_order || raise(ActiveRecord::RecordNotFound)
+      order.payments.create!({
+        :source => Spree::PaypalExpressCheckout.create({
+          :token => params[:token],
+          :payer_id => params[:PayerID]
+        }),
+        :amount => order.total,
+        :payment_method => payment_method
+      })
+      order.next
+      if order.complete?
+        flash.notice = Spree.t(:order_processed_successfully)
+>>>>>>> parent of 6f8dfdd... make sure order advances to completion
         flash[:commerce_tracking] = "nothing special"
         redirect_to completion_route(user_order)
       else
